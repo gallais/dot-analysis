@@ -67,9 +67,9 @@ isDependencyGraph (DotGraph False True _ (DotStmts [] [] nodes edges))
 isDependencyGraph _ = Nothing
 
 display :: Ord n => Labels n -> (n, Neighbours n) -> Text
-display lbls (nm, Neighbours parents children)
+display lbls (nm, ngh@(Neighbours parents children))
   = T.unlines
-  $ unsafeLookup nm
+  $ unsafeLookup nm <> T.pack (" (" ++ show (score ngh) ++ ")")
   :  prefixedSet '↑' parents
   ++ prefixedSet '↓' children
 
