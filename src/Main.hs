@@ -23,6 +23,7 @@ import Data.GraphViz.Types (parseDotGraph)
 import Data.GraphViz.Types.Canonical
 
 import System.Environment (getArgs)
+import System.Exit (die)
 
 type Node = String
 type Label = String
@@ -79,7 +80,9 @@ isDependencyGraph (DotGraph False True _ (DotStmts [] [] nodes edges))
        pure $ DependencyGraph (Map.fromList labels) (Map.fromListWith (<>) nghbrs)
 isDependencyGraph _ = Nothing
 
-colour :: Ord n => (Neighbours n v -> w) -> DependencyGraph n v -> DependencyGraph n w
+colour :: Ord n
+       => (Neighbours n v -> w)
+       -> DependencyGraph n v -> DependencyGraph n w
 colour f = onContexts $ \ ngh -> f ngh <$ ngh
 
 display :: (Ord n, Show v) => Labels n -> (n, Neighbours n v) -> Text
@@ -93,16 +96,26 @@ display lbls (nm, ngh@(Neighbours v parents children))
     prefixedSet = \ c -> map ((T.pack ("  " ++ [c]) <>) . unsafeLookup) . Set.toList
     unsafeLookup = fromJust . flip Map.lookup lbls
 
+fromFile :: FilePath -> IO (DependencyGraph String ())
+fromFile fp = do
+  file <- T.readFile fp
+  let grph = parseDotGraph file
+  case isDependencyGraph grph of
+    Nothing -> die "Invalid dependency graph"
+    Just deps -> pure deps
+
+top5 :: Ord n => DependencyGraph n Scoring -> [(n, Neighbours n Float)]
+top5 = fmap (fmap (fmap degreeScore))
+     . take 5
+     . List.sortBy (flip (compare `on` (degreeScore . value . snd)))
+     . Map.toList
+     . Map.filter (not . inTheFringe . value)
+     . contexts
+
+
 main :: IO ()
 main = do
   (fp : _) <- getArgs
-  file <- T.readFile fp
-  let grph = (parseDotGraph file :: DotGraph String)
-  case isDependencyGraph grph of
-    Nothing -> putStrLn "oops"
-    Just deps -> do
-      let heavies = List.sortBy (flip (compare `on` (degreeScore . value . snd)))
-                  $ Map.toList
-                  $ Map.filter (not . inTheFringe . value)
-                  $ contexts $ colour scoring deps
-      for_ (take 5 heavies) $ T.putStrLn . display (labels deps) . fmap (fmap degreeScore)
+  deps <- fromFile fp
+  let heavies = top5 $ colour scoring deps
+  for_ heavies $ T.putStrLn . display (labels deps)
