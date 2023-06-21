@@ -1,0 +1,37 @@
+digraph dependencies {
+   m0[label="Data.Irrelevant"];
+   m1[label="Agda.Builtin.Bool"];
+   m2[label="Data.Empty.Irrelevant"];
+   m3[label="Data.Unit.Base"];
+   m4[label="Data.Sum.Base"];
+   m5[label="Function.Base"];
+   m6[label="Agda.Primitive"];
+   m7[label="Data.Bool.Base"];
+   m8[label="Agda.Builtin.Unit"];
+   m9[label="Relation.Nullary.Negation.Core"];
+   m10[label="Data.Product.Base"];
+   m11[label="Data.Empty"];
+   m12[label="Agda.Builtin.Sigma"];
+   m13[label="Data.Product"];
+   m14[label="Level"];
+   m0 -> m14;
+   m1 -> m6;
+   m2 -> m11;
+   m3 -> m8;
+   m4 -> m5;
+   m4 -> m7;
+   m5 -> m14;
+   m7 -> m1;
+   m7 -> m3;
+   m7 -> m11;
+   m8 -> m6;
+   m9 -> m2;
+   m9 -> m4;
+   m9 -> m10;
+   m10 -> m5;
+   m10 -> m12;
+   m11 -> m0;
+   m12 -> m6;
+   m13 -> m9;
+   m14 -> m6;
+}
