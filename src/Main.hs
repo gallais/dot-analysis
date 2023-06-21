@@ -27,49 +27,65 @@ import System.Environment (getArgs)
 type Node = String
 type Label = String
 
-data Neighbours n =  Neighbours
-  { parents  :: Set n
+data Neighbours n v = Neighbours
+  { value    :: v
+  , parents  :: Set n
   , children :: Set n
-  } deriving (Show)
+  } deriving (Show, Functor, Foldable, Traversable)
 
-degreeWith :: (Int -> Int -> Int) -> Neighbours n -> Int
+degreeWith :: (Int -> Int -> Int) -> Neighbours n v -> Int
 degreeWith f ngh = (f `on` Set.size) (parents ngh) (children ngh)
 
-degree :: Neighbours n -> Int
+degree :: Neighbours n v -> Int
 degree = degreeWith (+)
 
-score :: Neighbours n -> Float
-score = sqrt . fromIntegral . degreeWith (\ parents children ->
-  parents + children * children)
+data Scoring = Scoring
+  { degreeScore :: Float
+  , inTheFringe :: Bool
+  }
+
+scoring :: Neighbours n v -> Scoring
+scoring ngh
+  = Scoring (sqrt $ fromIntegral $ degreeWith (\ parents children -> parents + children * children) ngh)
+            (null (parents ngh) || null (children ngh))
 
 type Labels n = Map n Text
 
-data DependencyGraph n = DependencyGraph
-  { labels :: Labels n
-  , edges  :: Map n (Neighbours n)
-  }
+data DependencyGraph n v = DependencyGraph
+  { labels   :: Labels n
+  , contexts :: Map n (Neighbours n v)
+  } deriving (Functor, Foldable, Traversable)
 
-instance Ord n => Semigroup (Neighbours n) where
-  Neighbours p1 c1 <> Neighbours p2 c2
-    = Neighbours (p1 <> p2) (c1 <> c2)
+onContexts :: Ord n
+           => (Neighbours n v -> Neighbours n w)
+           -> (DependencyGraph n v -> DependencyGraph n w)
+onContexts f (DependencyGraph labels contexts)
+  = DependencyGraph labels (f <$> contexts)
 
-isDependencyGraph :: Ord n => DotGraph n -> Maybe (DependencyGraph n)
+instance (Ord n, Semigroup v) => Semigroup (Neighbours n v) where
+  Neighbours v1 p1 c1 <> Neighbours v2 p2 c2
+    = Neighbours (v1 <> v2) (p1 <> p2) (c1 <> c2)
+
+isDependencyGraph :: Ord n => DotGraph n -> Maybe (DependencyGraph n ())
 isDependencyGraph (DotGraph False True _ (DotStmts [] [] nodes edges))
   = do labels <- for nodes $ \case
          DotNode id [Label (StrLabel txt)] -> pure (id, txt)
          _ -> Nothing
        nghbrs <- fmap concat $ for edges $ \case
-         DotEdge from to [] -> pure [ (to, Neighbours mempty (Set.singleton from))
-                                    , (from, Neighbours (Set.singleton to) mempty)
+         DotEdge from to [] -> pure [ (to, Neighbours () mempty (Set.singleton from))
+                                    , (from, Neighbours () (Set.singleton to) mempty)
                                     ]
          _ -> Nothing
        pure $ DependencyGraph (Map.fromList labels) (Map.fromListWith (<>) nghbrs)
 isDependencyGraph _ = Nothing
 
-display :: Ord n => Labels n -> (n, Neighbours n) -> Text
-display lbls (nm, ngh@(Neighbours parents children))
+colour :: Ord n => (Neighbours n v -> w) -> DependencyGraph n v -> DependencyGraph n w
+colour f = onContexts $ \ ngh -> f ngh <$ ngh
+
+display :: (Ord n, Show v) => Labels n -> (n, Neighbours n v) -> Text
+display lbls (nm, ngh@(Neighbours v parents children))
   = T.unlines
-  $ unsafeLookup nm <> T.pack (" (" ++ show (score ngh) ++ ")")
+  $ unsafeLookup nm <> T.pack (" (" ++ show v ++ ")")
   :  prefixedSet '↑' parents
   ++ prefixedSet '↓' children
 
@@ -85,7 +101,8 @@ main = do
   case isDependencyGraph grph of
     Nothing -> putStrLn "oops"
     Just deps -> do
-      let heavies = List.sortBy (flip (compare `on` (score . snd)))
-                  $ filter (\ (_, ngh) -> degreeWith (*) ngh /= 0)
-                  $ Map.toList (edges deps)
-      for_ (take 5 heavies) $ T.putStrLn . display (labels deps)
+      let heavies = List.sortBy (flip (compare `on` (degreeScore . value . snd)))
+                  $ Map.toList
+                  $ Map.filter (not . inTheFringe . value)
+                  $ contexts $ colour scoring deps
+      for_ (take 5 heavies) $ T.putStrLn . display (labels deps) . fmap (fmap degreeScore)
