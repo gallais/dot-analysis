@@ -23,6 +23,7 @@ extra-source-files: CHANGELOG.md
 
 executable dot-analysis
     main-is:          Main.hs
+    default-extensions: LambdaCase
 
     -- Modules included in this executable, other than Main.
     -- other-modules:
