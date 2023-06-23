@@ -27,14 +27,16 @@ executable dot-analysis
     default-extensions: DeriveFoldable
                       , DeriveTraversable
                       , LambdaCase
+                      , ScopedTypeVariables
 
     -- Modules included in this executable, other than Main.
-    -- other-modules:
+    other-modules: Data.DependencyGraph
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
     build-depends:    base >=4.13
                     , containers >=0.6 && <0.7
+                    , filepath >=1.4 && <1.5
                     , graphviz >=2999.20 && <2999.21
                     , text >=2.0 && <2.1
     hs-source-dirs:   src
