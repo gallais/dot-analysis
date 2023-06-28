@@ -21,5 +21,5 @@ cabal install .
 
 4. Run `dot-analysis` -
     ```
-    dot-analysis {agda_file_name}.agda
+    dot-analysis {file_name}.dot
     ```
