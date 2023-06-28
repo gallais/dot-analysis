@@ -19,6 +19,9 @@ import Data.GraphViz.Attributes.Complete (Attribute(Label), Label(..))
 import Data.GraphViz.Types (parseDotGraph, printDotGraph)
 import Data.GraphViz.Types.Canonical
 
+import Data.GraphViz.Types.Generalised (fromGeneralised)
+import qualified Data.GraphViz.Types.Generalised as Generalised
+
 import System.Exit (die)
 
 ------------------------------------------------------------------------
@@ -99,7 +102,7 @@ toDotGraph (DependencyGraph labels nghbrs)
 fromFile :: FilePath -> IO (DependencyGraph String ())
 fromFile fp = do
   file <- T.readFile fp
-  let grph = parseDotGraph file
+  let grph = fromGeneralised (parseDotGraph file :: Generalised.DotGraph String)
   case fromDotGraph grph of
     Nothing -> die "Invalid dependency graph"
     Just deps -> pure deps
