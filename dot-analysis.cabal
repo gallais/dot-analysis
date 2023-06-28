@@ -19,7 +19,6 @@ maintainer:         guillaume.allais@ens-lyon.org
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: CHANGELOG.md
 
 executable dot-analysis
     main-is:          Main.hs
