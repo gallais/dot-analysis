@@ -14,11 +14,6 @@ import qualified Data.Set as Set
 
 import Data.Foldable (for_)
 
-import Data.GraphViz.Attributes.Complete
-  ( Attribute(Label, FillColor, Style)
-  , Label(..)
-  , StyleItem(SItem), StyleName(Filled))
-import Data.GraphViz.Attributes.Colors (toWC, Color(RGB))
 
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as T
@@ -30,21 +25,6 @@ import System.Environment (getArgs)
 import System.FilePath (takeDirectory, takeFileName, (</>))
 
 import Data.DependencyGraph
-
-data Scoring f = Scoring
-  { degreeScore :: f
-  , inTheFringe :: Bool
-  }
-
-arityScoring :: Floating f => Neighbours n v -> Scoring f
-arityScoring ngh
-  = Scoring (sqrt $ fromIntegral $ degreeWith (\ parents children -> parents + children * children) ngh)
-            (null (parents ngh) || null (children ngh))
-
-weightScoring :: Floating f => Neighbours n Int -> Scoring f
-weightScoring ngh
-  = let score = value ngh * Set.size (children ngh) in
-    Scoring (fromIntegral score) (score == 0)
 
 display :: (Ord n, Show v) => Labels n -> (n, Neighbours n v) -> Text
 display lbls (nm, ngh@(Neighbours v parents children))
@@ -64,21 +44,6 @@ top5 = fmap (fmap (fmap degreeScore))
      . Map.toList
      . Map.filter (not . inTheFringe . value)
      . contexts
-
-shading :: Ord n
-        => DependencyGraph n (Scoring Double)
-        -> DependencyGraph n [Attribute]
-shading grph
-   = let scale = floor $ maximum (fmap degreeScore grph) :: Integer in
-     grph <&> \ score ->
-       let upper = fromIntegral (maxBound :: Word8)
-           scaling = (floor (degreeScore score) * upper) `quot` scale
-           weight = if inTheFringe score then maxBound
-                    else maxBound - fromIntegral scaling
-       in
-       [ FillColor [toWC (RGB maxBound weight weight)]
-       , Style [SItem Filled []]
-       ]
 
 main :: IO ()
 main = do

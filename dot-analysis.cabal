@@ -25,6 +25,7 @@ executable dot-analysis
 
     default-extensions: DeriveFoldable
                       , DeriveTraversable
+                      , GeneralisedNewtypeDeriving
                       , LambdaCase
                       , ScopedTypeVariables
 
