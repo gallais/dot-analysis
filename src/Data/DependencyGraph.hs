@@ -1,3 +1,6 @@
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
+
+
 module Data.DependencyGraph where
 
 import Data.Function (on)
@@ -9,6 +12,9 @@ import qualified Data.Map as Map
 
 import Data.Set (Set)
 import qualified Data.Set as Set
+
+import Data.Maybe (fromJust)
+import Data.Semigroup (getMax)
 
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy.IO as T (readFile, writeFile)
@@ -57,12 +63,47 @@ data DependencyGraph n v = DependencyGraph
   } deriving (Functor, Foldable, Traversable)
 
 
-onContexts :: Ord n
-           => (Neighbours n v -> Neighbours n w)
+mapWithKey :: Ord n
+           => (n -> Neighbours n v -> Neighbours n w)
            -> (DependencyGraph n v -> DependencyGraph n w)
-onContexts f (DependencyGraph labels contexts)
-  = DependencyGraph labels (f <$> contexts)
+mapWithKey f (DependencyGraph labels contexts)
+  = DependencyGraph labels (Map.mapWithKey f contexts)
 
+------------------------------------------------------------------------
+-- Computing a node's transitive dependencies
+
+transitively :: forall n a v. (Ord n, Monoid a)
+             => (n -> a -> a)
+             -> DependencyGraph n v
+             -> Map n a
+transitively f grph = go (contexts (mempty <$ grph)) mempty where
+
+  go :: Map n (Neighbours n a) -> Map n a -> Map n a
+  go acc res | null acc = res
+  go acc res
+    = let (next, acc') = Map.partition (null . parents) acc in
+      let res' = Map.union res (value <$> next) in
+      let update ngh =
+            let (hits, miss) = Set.partition (`Map.member` next) (parents ngh) in
+            let diff = foldMap (\ n -> f n (fromJust $ Map.lookup n res')) hits in
+            ngh { parents = miss, value = value ngh <> diff }
+      in go (update <$> acc') res'
+
+dependencyNames :: Ord n => DependencyGraph n v -> Map n (Set n)
+dependencyNames = transitively Set.insert
+
+dependencyWeights :: Ord n => DependencyGraph n v -> Map n Int
+dependencyWeights = fmap Set.size . dependencyNames
+
+newtype SmallNat = SmallNat { getSmallNat :: Int }
+  deriving (Eq, Ord, Num)
+
+instance Bounded SmallNat where
+  minBound = SmallNat 0
+  maxBound = SmallNat maxBound
+
+dependencyDepth :: Ord n => DependencyGraph n v -> Map n Int
+dependencyDepth = fmap (getSmallNat . getMax) . transitively (const (1+))
 
 ------------------------------------------------------------------------
 -- Converting back and forth to a DOT graph
@@ -79,7 +120,6 @@ fromDotGraph (DotGraph False True _ (DotStmts [] [] nodes edges))
          _ -> Nothing
        pure $ DependencyGraph (Map.fromList labels) (Map.fromListWith (<>) nghbrs)
 isDependencyGraph _ = Nothing
-
 
 toDotGraph :: forall n. Ord n => DependencyGraph n [Attribute] -> DotGraph n
 toDotGraph (DependencyGraph labels nghbrs)
