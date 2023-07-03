@@ -21,5 +21,5 @@ cabal install .
 
 4. Run `dot-analysis` -
     ```
-    dot-analysis {file_name}.dot
+    dot-analysis [--arity] [--weight] [--top] FILE
     ```

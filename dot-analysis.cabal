@@ -38,6 +38,7 @@ executable dot-analysis
                     , containers >=0.6 && <0.7
                     , filepath >=1.4 && <1.5
                     , graphviz >=2999.20 && <2999.21
+                    , optparse-applicative >=0.17 && <0.18
                     , text >=2.0 && <2.1
     hs-source-dirs:   src
     default-language: Haskell2010

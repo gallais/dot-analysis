@@ -1,6 +1,8 @@
 module Main where
 
-import Data.Functor ((<&>))
+import Control.Monad (unless, when)
+
+import Data.Foldable (for_)
 import Data.Function (on)
 
 import qualified Data.List as List
@@ -12,16 +14,19 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Data.Foldable (for_)
-
-
 import Data.Text.Lazy (Text)
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as T
 
-import Data.Word (Word8)
+import Options.Applicative
+  (Parser, execParser, (<**>)
+  , info, helper
+  , fullDesc, progDesc, header
+  , str
+  , flag, argument
+  , long, metavar, help
+  , completer, bashCompleter)
 
-import System.Environment (getArgs)
 import System.FilePath (takeDirectory, takeFileName, (</>))
 
 import Data.DependencyGraph
@@ -45,27 +50,50 @@ top5 = fmap (fmap (fmap degreeScore))
      . Map.filter (not . inTheFringe . value)
      . contexts
 
+data Options = Options
+  { arities :: Bool
+  , weights :: Bool
+  , withTop :: Bool
+  , graph   :: FilePath
+  }
+
+poptions :: Parser Options
+poptions = Options
+  <$> flag False True (long "arity"  <> help "Highlight the graph using arities")
+  <*> flag False True (long "weight" <> help "Highlight the graph using weights")
+  <*> flag False True (long "top"    <> help "List top 5 modules on the command line")
+  <*> argument str (metavar "FILE" <> completer (bashCompleter "file") <> help "Input file")
+
+listTop5 :: (Ord n, Ord f, Show f) => DependencyGraph n (Scoring f) -> IO ()
+listTop5 grph = do
+  for_ (top5 grph) $ T.putStrLn . display (labels grph)
+
 main :: IO ()
 main = do
-  (fp : _) <- getArgs
-  deps <- fromFile fp
---  let coloured = colour (const arityScoring) deps
-  let weights  = dependencyWeights deps
-  let coloured = mapWithKey (\ n ngh -> weightScoring (fromJust (Map.lookup n weights) <$ ngh) <$ ngh) deps
+  -- parsing and sanity checking options
+  opts <- execParser (info (poptions <**> helper)
+                     (fullDesc <> progDesc "run requested analysis on graph"
+                               <> header "dot-analysis - analysing dependency graphs produced by Agda"))
+  opts <- pure $ if arities opts || weights opts
+                 then opts else opts { weights = True }
 
-{-
-  let depNames = Map.fromList
-               $ zipWith3 (\ (k, v1) (_, v2) (_, v3) -> (k, (v1, v2, v3)))
-                 (Map.toList $ dependencyDepth coloured)
-                 (Map.toList $ dependencyWeights coloured)
-                 (Map.toList $ dependencyNames coloured)
-  let heavies = top5 coloured
-  for_ heavies $ \ heavy -> do
-    let name = fst heavy
-    let (depth, weight, dependencies) = fromJust $ Map.lookup name depNames
-    T.putStrLn $ display (labels deps) heavy
-    T.putStrLn $ T.unlines
-      $ fromJust (Map.lookup name $ labels deps) <> T.pack (concat [ " (", show depth, ", ", show weight, ", ", show (Set.size dependencies), ")"])
-      : map ((T.pack "  " <>) . fromJust . flip Map.lookup (labels deps)) (Set.toList dependencies)
--}
-  toFile (takeDirectory fp </> "updated-" <> takeFileName fp) (shading coloured)
+  -- filename business
+  let fpath = graph opts
+  let dir   = takeDirectory fpath
+  let fname = takeFileName fpath
+  let mkFP prefix = dir </> prefix <> fname
+
+  -- load graph
+  deps <- fromFile fpath
+
+  -- perform analyses
+  when (arities opts) $ do
+    let coloured = mapWithKey (\ n ngh -> arityScoring ngh <$ ngh) deps
+    toFile (mkFP "arities-") (shading coloured)
+    when (withTop opts) $ listTop5 coloured
+
+  when (weights opts) $ do
+    let weights  = dependencyWeights deps
+    let coloured = mapWithKey (\ n ngh -> weightScoring (fromJust (Map.lookup n weights) <$ ngh) <$ ngh) deps
+    toFile (mkFP "weights-") (shading coloured)
+    when (withTop opts) $ listTop5 coloured
